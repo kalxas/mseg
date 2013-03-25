@@ -1,4 +1,4 @@
-Welcome to Mseg v0.5
+Welcome to Mseg v0.9.5
 
 Mseg is a generic region-based multi-scale image segmentation algorithm designed with 
 some optimizations for remote sensing imagery. 
@@ -9,7 +9,7 @@ Mseg is Free Software licenced under the GPLv2.
 
 Installation:
 
-1. Dependencies: CMake, FreeImage
+1. Dependencies: CMake, FreeImage, TinyXML
 
 2. Run cmake configuration:
 

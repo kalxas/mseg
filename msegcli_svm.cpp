@@ -1,11 +1,11 @@
 /* * * * * * * * * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *
- * msegcli.cpp: Multiscale SEGmentation Command Line Interface            *
+ * msegcli_svm.cpp: Multiscale SEGmentation Command Line Interface (SVM)  *
  * Version: 0.9.x                                                         *
- * Last revised: 01/01/2006                                               *
+ * Last revised: 02/06/2006                                               *
  *                                                                        *
  * * * * * * * * * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *
  * MSEG algorithm by Angelos Tzotsos (tzotsos@gmail.com)		  *
- * Remote Sensing Lab NTUA - GCpp                         January 2006    *
+ * Remote Sensing Lab NTUA - GCpp                         June 2006       *
  *									  *
  *   Copyright (C) Angelos Tzotsos <tzotsos@gmail.com>	  		  *
  *									  *
@@ -47,12 +47,14 @@ int main (int argc, char *argv[]){
 		string bound = "boundary";
 		string rst = "raster";
 		string xml = "stats";
+		string train = "training";
+		string tta = "TTAMask";
 
 		if(argc != 5){//TODO: Add to Error Handling
             cout << "Error in arguments:" << endl << endl
             << "Usage : mseg <input.ers> <output.ers> <image weights text file> <Level sequence and parameter text file>"
             << endl;
-            cin.get();
+            system("Pause");
             exit(1);
         }
 
@@ -88,6 +90,7 @@ int main (int argc, char *argv[]){
         //Open image file for input
         ERS_Image Img(arg1, 0);
 
+
         //Store input band weights
         ifstream WeightsFile(arg3.c_str());
         if(!WeightsFile){
@@ -104,7 +107,6 @@ int main (int argc, char *argv[]){
 
         //Run SPE module
         SPE.HSI(Img, mseg);
-
         //Run First pass
 		Level pass1;
         merges_occured = speed_mode.firstpass(pass1, Img, mseg, 1.0, mseg.LevelQueue[0].param);
@@ -151,7 +153,7 @@ int main (int argc, char *argv[]){
   		    }
   		}
 
-  		if(flag_npass == 1){
+  	if(flag_npass == 1){
   		    passn2.CalculateProperties(Img);
   		    cout << "Statistics calculated" << endl;
         	passn2.SaveMeanAsERS(arg2, Img);//the last merged level will be the previous one since no merges occured
@@ -165,6 +167,10 @@ int main (int argc, char *argv[]){
         	passn2.SaveBoundaryMapERS(bound);
         	passn2.SaveXML(xml, Img);
         	passn2.SaveProperties(xml);
+        	passn2.SaveSVMTesting(xml);
+        	passn2.LoadTTA(tta);
+        	passn2.SaveSVMTraining(train);
+        	//passn2.SaveSVMTrainingVoting(train, 0.75);
   		}
 
         if(flag_npass == 2){
@@ -181,6 +187,10 @@ int main (int argc, char *argv[]){
         	passn1.SaveBoundaryMapERS(bound);
         	passn1.SaveXML(xml, Img);
         	passn1.SaveProperties(xml);
+        	passn1.SaveSVMTesting(xml);
+        	passn1.LoadTTA(tta);
+        	passn1.SaveSVMTraining(train);
+        	//passn1.SaveSVMTrainingVoting(train, 0.75);
   		}
 
 		//close image file
@@ -191,18 +201,4 @@ int main (int argc, char *argv[]){
         return 0;
 
 }//main end
-
-
-
-    	//Generic run...
-        //For every level in LevelQueue,
-        	//if no sublevel run 1stpass
-         	//if no sublevel and if something was merged, run 2ndpass
-          	//if something was merged, run nthpass
-           		//while new merges occur run nthpass
-           //push level in LevelHierarchy
-
-        //Save levels to output file
-        //write output ers header file
-
 

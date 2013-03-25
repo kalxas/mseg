@@ -1,5 +1,5 @@
 /* * * * * * * * * * * * * * * * * * *  * * * * * * * * * * * * * * * * * *
- * msegcli.cpp: Multiscale SEGmentation Command Line Interface            *
+ * msegcli_tex.cpp: Multiscale SEGmentation Command Line Interface (Tex)  *
  * Version: 0.9.x                                                         *
  * Last revised: 01/01/2006                                               *
  *                                                                        *
@@ -36,6 +36,9 @@
 
 #include "msegcore.h"
 #include "msegstd.h"
+#include "msegslow.h"
+#include "msegfast.h"
+#include "msegfastest.h"
 #include "FreeImage.h"
 
 using namespace std;
@@ -47,12 +50,16 @@ int main (int argc, char *argv[]){
 		string bound = "boundary";
 		string rst = "raster";
 		string xml = "stats";
+		/* //Uncomment for svm classification
+		string train = "training";
+		string tta = "TTAMask";
+		*/
 
 		if(argc != 5){//TODO: Add to Error Handling
             cout << "Error in arguments:" << endl << endl
             << "Usage : mseg <input.ers> <output.ers> <image weights text file> <Level sequence and parameter text file>"
             << endl;
-            cin.get();
+            system("Pause");
             exit(1);
         }
 
@@ -76,9 +83,13 @@ int main (int argc, char *argv[]){
             LevelQueueList >> tmpQueueObj.param.Color;
             LevelQueueList >> tmpQueueObj.param.Compact;
             LevelQueueList >> tmpQueueObj.param.Edge;
+            LevelQueueList >> tmpQueueObj.param.Texture;
+            LevelQueueList >> tmpQueueObj.param.quantizer;
+            LevelQueueList >> tmpQueueObj.param.distance;
             LevelQueueList >> tmpQueueObj.param.EC;
             LevelQueueList >> tmpQueueObj.param.GHH;
             LevelQueueList >> tmpQueueObj.param.MA;
+            LevelQueueList >> tmpQueueObj.param.TH;
             mseg.LevelQueue.push_back(tmpQueueObj);
         }
         LevelQueueList.close();
@@ -87,6 +98,7 @@ int main (int argc, char *argv[]){
 
         //Open image file for input
         ERS_Image Img(arg1, 0);
+        Texture_Image TexImg(Img, mseg.LevelQueue[0].param.quantizer, mseg.LevelQueue[0].param.distance);
 
         //Store input band weights
         ifstream WeightsFile(arg3.c_str());
@@ -100,7 +112,9 @@ int main (int argc, char *argv[]){
         WeightsFile.close();
 
         Starting_Points_Estimation SPE(0);
-        Standard_Mode speed_mode;
+
+		Standard_Mode speed_mode;
+        Slow_Mode slow;
 
         //Run SPE module
         SPE.HSI(Img, mseg);
@@ -115,9 +129,28 @@ int main (int argc, char *argv[]){
 		merges_occured = speed_mode.secondpass(pass2, Img, mseg, pass1);
 		cout << "Merges occured at cycle " << 2 << " were " << merges_occured << endl;
 
-		//pass1.clear();
+		pass1.clear();
 		//cout << "Level 1 deleted" << endl;
 
+        //Open Texture image for input
+        if(mseg.LevelQueue[0].param.TH){//Check Texture Usage
+		    TexImg.FullYBuffer();
+		    //cout << "Image buffer size is " << Img.Buffer.size() << endl;
+			cout << "Texture buffer size is " << TexImg.YBuffer.size() << endl;
+			//cout << "BuffMin = " << TexImg.BuffMin << " BuffMax = " << TexImg.BuffMax << endl;
+		    TexImg.BuildHistogram();
+		    /*for(int i=0; i<TexImg.bitdepth; i++){
+			    cout << TexImg.hist[i] << endl;
+			}*/
+		    cout << "Texture image histogram size is " << TexImg.hist.size() << endl;
+		    TexImg.CalculateLUT();
+		    cout << "LUT calculated!" << endl;
+		    /*for(int i=0; i<256; i++){
+		        cout << (int)TexImg.LUT[i] << endl;
+			}*/
+		    TexImg.BuildCoCube();
+		    cout << "CoCube built!" << endl;
+        }
 
 		//Declare 2 temp nth pass levels
 		Level passn1;
@@ -126,30 +159,58 @@ int main (int argc, char *argv[]){
 		int sw = -1;//switch to use with power...
 		int flag_npass;
 
-  		//Run 3rd pass
-  		if(merges_occured){//if second pass merged something, enter the nth pass loop...
-		    merges_occured = speed_mode.nthpass(passn1, Img, mseg, pass2);
-		    cycle++;
-		    cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
-		    flag_npass = 1;
-		}
+		if(!mseg.LevelQueue[0].param.TH){//Check Texture Usage
+	        //Run 3rd pass
+  			if(merges_occured){//if second pass merged something, enter the nth pass loop...
+		        merges_occured = speed_mode.nthpass(passn1, Img, mseg, pass2);
+		    	cycle++;
+		     	cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
+		    	flag_npass = 1;
+		    }
 
-		//Run nth pass
-        while(merges_occured){
-  		    if(pow(sw, cycle)<0.0){
-  		        merges_occured = speed_mode.nthpass(passn2, Img, mseg, passn1);
-  		        cycle++;
-  		        cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
-  		        flag_npass = 2;
-  		        if(merges_occured) passn1.clear();
-  		    }else{
-   	    		merges_occured = speed_mode.nthpass(passn1, Img, mseg, passn2);
-   	    		cycle++;
-   	    		cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
-   	    		flag_npass = 1;
-   	    		if(merges_occured) passn2.clear();
-  		    }
-  		}
+			//Run nth pass
+        	while(merges_occured){
+	   		    if(pow(sw, cycle)<0.0){
+     		        merges_occured = speed_mode.nthpass(passn2, Img, mseg, passn1);
+  		        	cycle++;
+  		        	cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
+  		        	flag_npass = 2;
+  		        	if(merges_occured) passn1.clear();
+			    }else{
+  			  	    merges_occured = speed_mode.nthpass(passn1, Img, mseg, passn2);
+   	    			cycle++;
+   	    			cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
+   	    			flag_npass = 1;
+   	    			if(merges_occured) passn2.clear();
+  		        }
+			}
+        }else{
+	        cout << "starting nth pass here" << endl;
+			//Run 3rd pass
+  			if(merges_occured){//if second pass merged something, enter the nth pass loop...
+		        merges_occured = slow.nthpass(passn1, Img, TexImg, mseg, pass2);
+		    	cycle++;
+		     	cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
+		    	flag_npass = 1;
+		    }
+
+			//Run nth pass
+        	while(merges_occured){
+	   		    if(pow(sw, cycle)<0.0){
+     		        merges_occured = slow.nthpass(passn2, Img, TexImg, mseg, passn1);
+  		        	cycle++;
+  		        	cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
+  		        	flag_npass = 2;
+  		        	if(merges_occured) passn1.clear();
+			    }else{
+  			  	    merges_occured = slow.nthpass(passn1, Img, TexImg, mseg, passn2);
+   	    			cycle++;
+   	    			cout << "Merges occured at cycle " << cycle << " were " << merges_occured << endl;
+   	    			flag_npass = 1;
+   	    			if(merges_occured) passn2.clear();
+  		        }
+			}
+		}
 
   		if(flag_npass == 1){
   		    passn2.CalculateProperties(Img);
@@ -165,6 +226,11 @@ int main (int argc, char *argv[]){
         	passn2.SaveBoundaryMapERS(bound);
         	passn2.SaveXML(xml, Img);
         	passn2.SaveProperties(xml);
+        	/*  //Uncomment for SVM classification
+        	passn2.SaveSVMTesting(xml);
+        	passn2.LoadTTA(tta);
+        	passn2.SaveSVMTraining(train);
+        	*/
   		}
 
         if(flag_npass == 2){
@@ -181,6 +247,12 @@ int main (int argc, char *argv[]){
         	passn1.SaveBoundaryMapERS(bound);
         	passn1.SaveXML(xml, Img);
         	passn1.SaveProperties(xml);
+        	/*  //Uncomment for SVM classification
+        	passn1.SaveSVMTesting(xml);
+        	passn1.LoadTTA(tta);
+        	passn1.SaveSVMTraining(train);
+        	*/
+
   		}
 
 		//close image file
@@ -192,17 +264,5 @@ int main (int argc, char *argv[]){
 
 }//main end
 
-
-
-    	//Generic run...
-        //For every level in LevelQueue,
-        	//if no sublevel run 1stpass
-         	//if no sublevel and if something was merged, run 2ndpass
-          	//if something was merged, run nthpass
-           		//while new merges occur run nthpass
-           //push level in LevelHierarchy
-
-        //Save levels to output file
-        //write output ers header file
 
 

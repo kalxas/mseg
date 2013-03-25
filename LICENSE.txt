@@ -1,3 +1,10 @@
+The MSEG software is Copyright (C) 2005-2012 Angelos Tzotsos <tzotsos@gmail.com> 
+
+You may use, distribute and copy the MSEG software package under the terms
+of the GNU General Public License version 2, which is displayed below.
+
+------------------------------------------------------------------------------
+
                     GNU GENERAL PUBLIC LICENSE
                        Version 2, June 1991
 
